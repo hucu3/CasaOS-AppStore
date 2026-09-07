@@ -1,0 +1,5 @@
+Homebox icon: upstream frontend/public/favicon.svg; trailing blank lines removed.
+Source: https://github.com/sysadminsmedia/homebox/blob/e01dd737238a3fa7e1a6454b37de6c6fc88c86e4/frontend/public/favicon.svg
+Upstream project license: GNU AGPL v3; see LICENSE-HOMEBOX.txt.
+Original project: Hay Kot; maintained continuation: SysAdminsMedia.
+Packaging is not an endorsement by the upstream project.

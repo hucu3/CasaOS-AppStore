@@ -1,0 +1,106 @@
+name: homebox
+services:
+  homebox:
+    image: ghcr.io/sysadminsmedia/homebox:0.26.2
+    restart: unless-stopped
+    environment:
+      HBOX_LOG_LEVEL: info
+      HBOX_LOG_FORMAT: text
+      HBOX_OPTIONS_ALLOW_ANALYTICS: "false"
+      HBOX_OPTIONS_ALLOW_REGISTRATION: "true"
+      HBOX_WEB_MAX_UPLOAD_SIZE: "10"
+    ports:
+      - target: 7745
+        published: "3100"
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: /DATA/AppData/$AppID/data
+        target: /data
+    # Bootstrap is inserted by the local generator. The complete script lives
+    # inline in the generated app definition; no extra host script is required.
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        umask 077
+        if [ -L /data/.homebox-api-key-pepper ]; then
+          echo 'Homebox: refusing a symlinked API key pepper.' >&2
+          exit 1
+        fi
+        if [ ! -e /data/.homebox-api-key-pepper ]; then
+          if find /data -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
+            echo 'Homebox: data exists without its API key pepper; restore the complete data backup before starting.' >&2
+            exit 1
+          fi
+          (
+            set -C
+            head -c 48 /dev/urandom | base64 > /data/.homebox-api-key-pepper.tmp
+          )
+          if ! grep -Exq '[A-Za-z0-9+/]{64}' /data/.homebox-api-key-pepper.tmp ||
+             ! wc -c < /data/.homebox-api-key-pepper.tmp | grep -Exq '[[:space:]]*65[[:space:]]*'; then
+            echo 'Homebox: pepper generation failed; inspect the temporary file before retrying.' >&2
+            exit 1
+          fi
+          ln /data/.homebox-api-key-pepper.tmp /data/.homebox-api-key-pepper
+          rm /data/.homebox-api-key-pepper.tmp
+        fi
+        if [ ! -f /data/.homebox-api-key-pepper ] ||
+           ! grep -Exq '[A-Za-z0-9+/]{64}' /data/.homebox-api-key-pepper ||
+           ! wc -c < /data/.homebox-api-key-pepper | grep -Exq '[[:space:]]*65[[:space:]]*'; then
+          echo 'Homebox: invalid API key pepper; restore the original file instead of regenerating it.' >&2
+          exit 1
+        fi
+        chmod 600 /data/.homebox-api-key-pepper
+        IFS= read -r HBOX_AUTH_API_KEY_PEPPER < /data/.homebox-api-key-pepper
+        export HBOX_AUTH_API_KEY_PEPPER
+        exec /app/api /data/config.yml
+    command: []
+    healthcheck:
+      test: [CMD, wget, --no-verbose, --tries=1, -O, "-", "http://127.0.0.1:7745/api/v1/status"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+x-casaos:
+  id: org.icewhale.homebox
+  main: homebox
+  index: /
+  port_map: "3100"
+  scheme: http
+  icon: icon.svg
+  title:
+    en_US: Homebox
+    es_ES: Homebox
+  tagline:
+    en_US: Organize your belongings and know where everything is.
+    es_ES: Organiza tus pertenencias y encuentra dónde está cada cosa.
+  description:
+    en_US: |
+      Homebox is a home inventory application for organizing belongings by location and label. Keep item details, photos, attachments and purchase information together, search your inventory, and create QR labels for your items.
+      This package uses the official SysAdminsMedia image and SQLite in one container. The complete /data directory stores the inventory, attachments and a private API key pepper generated on first start. Analytics are disabled. Email, OIDC, MQTT and external label printing require separate configuration.
+    es_ES: |
+      Homebox es una aplicación de inventario doméstico para organizar pertenencias por ubicación y etiquetas. Guarda detalles, fotos, adjuntos e información de compra, busca en tu inventario y crea etiquetas QR para tus objetos.
+      Este paquete utiliza la imagen oficial de SysAdminsMedia y SQLite en un solo contenedor. La carpeta /data conserva el inventario, los adjuntos y una clave interna privada generada en el primer arranque. Las estadísticas de uso están desactivadas. El correo, OIDC, MQTT y la impresión externa requieren configuración adicional.
+  tips:
+    before_install:
+      en_US: |
+        For a new installation, choose an unused web port and an empty data directory. Create your own account after opening Homebox; there are no packaged login credentials. Registration starts enabled. After creating the required accounts, set HBOX_OPTIONS_ALLOW_REGISTRATION to false in the app environment settings and restart the app.
+        Back up the complete data directory, including the hidden .homebox-api-key-pepper file, while the container is stopped. Keep that file unchanged across updates and restores; losing or rotating it invalidates existing API keys. This package refuses to initialize an existing data directory without its pepper. Migration from another Homebox installation requires a separate reviewed procedure.
+      es_ES: |
+        Para una instalación nueva, elige un puerto web libre y una carpeta de datos vacía. Crea tu propia cuenta al abrir Homebox; no se incluyen credenciales de acceso. El registro inicia habilitado. Después de crear las cuentas necesarias, cambia HBOX_OPTIONS_ALLOW_REGISTRATION a false en las variables de la app y reiníciala.
+        Respalda toda la carpeta de datos, incluido el archivo oculto .homebox-api-key-pepper, con el contenedor detenido. Conserva ese archivo sin cambios en actualizaciones y restauraciones; perderlo o cambiarlo invalida las claves API existentes. Este paquete rechaza datos existentes sin su clave interna. Migrar otra instalación de Homebox requiere un procedimiento específico revisado.
+  author: hucu3
+  developer: SysAdminsMedia
+  category: Home
+  architectures:
+    - amd64
+  version: "0.26.2"
+  update_at: "2026-09-06"
+  release_notes:
+    en_US: Initial package with persistent inventory storage and automatic private API key pepper initialization.
+    es_ES: Paquete inicial con inventario persistente e inicialización automática de la clave interna privada.
+  website: https://homebox.software
+  repo: https://github.com/sysadminsmedia/homebox
+  support: https://github.com/sysadminsmedia/homebox/issues
+  docs: https://homebox.software/en/quick-start/install/
